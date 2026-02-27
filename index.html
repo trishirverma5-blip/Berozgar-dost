@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Global Chat</title>
+    <style>
+        :root { --bg: #0b141a; --header: #202c33; --msg-me: #005c4b; --msg-them: #202c33; --accent: #00a884; }
+        body { background: var(--bg); color: white; font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        /* Header Section */
+        #header { background: var(--header); padding: 12px 18px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #111; box-shadow: 0 2px 5px rgba(0,0,0,0.4); }
+        .pts-ui { color: #ffd700; font-weight: bold; font-size: 1em; text-shadow: 0 0 5px rgba(255,215,0,0.3); }
+
+        /* Chat Window */
+        #chat { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; background: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-blend-mode: overlay; background-color: rgba(11,20,26,0.96); }
+        .m { padding: 10px 14px; border-radius: 12px; max-width: 75%; font-size: 15px; position: relative; box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+        .mine { background: var(--msg-me); align-self: flex-end; border-bottom-right-radius: 2px; }
+        .other { background: var(--msg-them); align-self: flex-start; border-bottom-left-radius: 2px; }
+        .u { font-size: 0.8em; font-weight: bold; color: #34b7f1; display: block; margin-bottom: 3px; }
+        .rank-tag { color: #ffd700; font-size: 0.75em; margin-left: 6px; background: rgba(0,0,0,0.4); padding: 2px 6px; border-radius: 5px; border: 0.5px solid rgba(255,215,0,0.3); }
+        .t { font-size: 0.65em; color: rgba(255,255,255,0.4); float: right; margin-top: 6px; margin-left: 10px; }
+
+        /* Input Form */
+        #form { background: var(--header); padding: 15px; display: flex; gap: 12px; align-items: center; }
+        input { flex: 1; background: #2a3942; border: none; padding: 14px 22px; border-radius: 30px; color: white; outline: none; font-size: 16px; }
+        button { background: var(--accent); border: none; color: white; width: 50px; height: 50px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+        button:active { transform: scale(0.9); }
+    </style>
+</head>
+<body>
+
+<div id="header">
+    <div style="display: flex; flex-direction: column;">
+        <strong id="my-name" style="font-size: 1.1em;">Guest</strong>
+        <span id="my-rank" style="font-size: 0.8em; color: var(--accent); font-weight: bold;">PLAYER</span>
+    </div>
+    <div class="pts-ui" id="my-pts">💰 0</div>
+</div>
+
+<div id="chat"></div>
+
+<form id="form">
+    <input id="input" placeholder="Type msg or /shop, /buy..." autocomplete="off">
+    <button type="submit">➤</button>
+</form>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+    const socket = io();
+    const chat = document.getElementById('chat');
+    const form = document.getElementById('form');
+    const input = document.getElementById('input');
+
+    // --- 🛒 SHOP DATABASE (Full 50 Ranks Logic) ---
+    const ranks = {
+        "Rookie": 100, "Guest": 200, "Member": 300, "Active": 400, "Talker": 500, "Chatter": 600, "Regular": 700, "Friend": 800, "Trusted": 900, "Verified": 1000,
+        "Fighter": 1500, "Soldier": 1800, "Warrior": 2100, "Knight": 2400, "Gladiator": 2700, "Spartan": 3000, "Slayer": 3500, "Commander": 4000, "General": 4500, "Warlord": 5000,
+        "Spy": 6000, "Ghost": 6500, "Phantom": 7000, "Coded": 8000, "Linux": 9000, "Terminal": 10000, "Root": 11000, "System-Error": 12000, "Mainframe": 13500, "Hacker": 15000,
+        "Elite": 20000, "Master": 25000, "Alpha": 28000, "Viper": 32000, "Cobra": 35000, "Dragon": 38000, "Phoenix": 40000, "Storm": 42000, "Thunder": 45000, "Shadow": 50000,
+        "Alien": 75000, "Astronaut": 90000, "Nebula": 100000, "Dark-Web": 150000, "Mythic": 200000, "Titan": 250000, "God": 300000, "Immortal": 350000, "Legend": 400000, "Overlord": 500000
+    };
+
+    // --- 💾 PHONE STORAGE (Local Saving) ---
+    let my = JSON.parse(localStorage.getItem('nexus_final_v3')) || {
+        n: prompt("Apna Naam Likhein (Username):") || "User" + Math.floor(Math.random()*99),
+        pts: 0,
+        r: 'PLAYER',
+        inv: ['PLAYER']
+    };
+
+    function update() {
+        localStorage.setItem('nexus_final_v3', JSON.stringify(my));
+        document.getElementById('my-name').innerText = my.n;
+        document.getElementById('my-pts').innerText = `💰 ${my.pts}`;
+        document.getElementById('my-rank').innerText = my.r;
+    }
+    update();
+
+    // --- CHAT HANDLER ---
+    socket.on('chat message', (data) => {
+        const isMe = data.u === my.n;
+        if(isMe) { my.pts += 10; update(); } // 10 Points gain on message
+
+        const div = document.createElement('div');
+        div.className = `m ${isMe ? 'mine' : 'other'}`;
+        div.innerHTML = `<span class="u">${data.u} <span class="rank-tag">${data.r}</span></span>${data.m}<span class="t">${data.t}</span>`;
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+    });
+
+    // --- COMMAND SYSTEM ---
+    form.onsubmit = (e) => {
+        e.preventDefault();
+        let val = input.value.trim();
+        if(!val) return;
+
+        // Command: SHOP
+        if(val === '/shop') {
+            let shopStr = "🛒 --- NEXUS VIP SHOP ---\n\n";
+            for(let key in ranks) { shopStr += `💎 ${key}: ${ranks[key]} pts\n`; }
+            alert(shopStr + "\nUse '/buy [RankName]' to purchase!");
+        }
+        // Command: BUY
+        else if(val.startsWith('/buy ')) {
+            let rName = val.split(' ')[1];
+            if(ranks[rName]) {
+                if(my.inv.includes(rName)) alert("Ye title pehle se hai!");
+                else if(my.pts >= ranks[rName]) {
+                    my.pts -= ranks[rName];
+                    my.inv.push(rName);
+                    my.r = rName;
+                    update();
+                    alert(`✅ Badhai ho! Aapne ${rName} rank kharid li.`);
+                } else alert(`Points kam hain! Iske liye ${ranks[rName]} pts chahiye.`);
+            } else alert("Rank nahi mili! Spell check karein.");
+        }
+        // Command: MY TITLES
+        else if(val === '/titles') {
+            alert("Aapke Unlocked Titles: \n" + my.inv.join(', '));
+        }
+        // Command: SET ACTIVE TITLE
+        else if(val.startsWith('/settitle ')) {
+            let tName = val.split(' ')[1];
+            if(my.inv.includes(tName)) { my.r = tName; update(); alert("Title change ho gaya!"); }
+            else alert("Pehle isse shop se /buy karein!");
+        }
+        // Admin Login
+        else if(val === '/login NEXUS_ADMIN_786') {
+            my.r = "OWNER";
+            if(!my.inv.includes("OWNER")) my.inv.push("OWNER");
+            update();
+            alert("👑 Swagat hai Malik! Owner Title On.");
+        }
+        // Normal Chat
+        else {
+            socket.emit('chat message', { u: my.n, m: val, r: my.r });
+        }
+        input.value = '';
+    };
+</script>
+</body>
+</html>
