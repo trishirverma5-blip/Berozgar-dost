@@ -1,0 +1,11 @@
+{
+  "name": "nexus-ultra-v3",
+  "version": "3.0.0",
+  "main": "index.js",
+  "scripts": { "start": "node index.js" },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.6.1",
+    "fs": "0.0.1-security"
+  }
+}
